@@ -2,6 +2,7 @@ lockfileVersion: 5.3
 
 specifiers:
   '@leekoho/prettier-config': ^0.0.1
+  '@types/lodash-es': ^4.17.6
   '@vitejs/plugin-vue': ^2.3.3
   '@windicss/plugin-animations': ^1.0.9
   lodash-es: ^4.17.21
@@ -20,6 +21,7 @@ dependencies:
 
 devDependencies:
   '@leekoho/prettier-config': 0.0.1_prettier@2.6.2
+  '@types/lodash-es': 4.17.6
   '@vitejs/plugin-vue': 2.3.3_vite@2.9.9+vue@3.2.33
   '@windicss/plugin-animations': 1.0.9
   prettier: 2.6.2
@@ -68,6 +70,16 @@ packages:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.13.0
+    dev: true
+
+  /@types/lodash-es/4.17.6:
+    resolution: {integrity: sha512-R+zTeVUKDdfoRxpAryaQNRKk3105Rrgx2CFRClIgRGaqDTdjsm8h6IYA8ir584W3ePzkZfst5xIgDwYrlh9HLg==}
+    dependencies:
+      '@types/lodash': 4.14.182
+    dev: true
+
+  /@types/lodash/4.14.182:
+    resolution: {integrity: sha512-/THyiqyQAP9AfARo4pF+aCGcyiQ94tX/Is2I7HofNRqoYLgN1PBoOWu2/zTA5zMxzP5EFutMtWtGAFRKUe961Q==}
     dev: true
 
   /@vitejs/plugin-vue/2.3.3_vite@2.9.9+vue@3.2.33:

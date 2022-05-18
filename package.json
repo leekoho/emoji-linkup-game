@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@leekoho/prettier-config": "^0.0.1",
+    "@types/lodash-es": "^4.17.6",
     "@vitejs/plugin-vue": "^2.3.3",
     "@windicss/plugin-animations": "^1.0.9",
     "prettier": "^2.6.2",

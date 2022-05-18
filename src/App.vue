@@ -135,6 +135,7 @@ const onTouchEnd = (e: TouchEvent) => {
 }
 
 const errorAnimate = (element: HTMLElement) => {
+  if (!direction.value) return
   const cls = [Direction.LEFT, Direction.RIGHT].includes(direction.value)
     ? 'animate-shakeX'
     : 'animate-shakeY'
