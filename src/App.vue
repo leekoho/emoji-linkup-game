@@ -13,7 +13,7 @@
       :key="block.id"
       :id="block.id"
       class="block"
-      @drag-end="offset => onDragEnd(block, offset)"
+      @drag-end="(offset: Offset) => onDragEnd(block, offset)"
     >
       {{ block.emoji }}
     </EmojiBlock>
@@ -23,7 +23,7 @@
 <script lang="ts" setup>
 import { reactive } from 'vue'
 import EmojiBlock from '@/components/EmojiBlock.vue'
-import { Offset, Position } from './typing'
+import type { Offset, Position } from './typing'
 
 interface Block {
   id: ReturnType<typeof generateId>
