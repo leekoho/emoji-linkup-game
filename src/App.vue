@@ -72,7 +72,7 @@ const onDragEnd = (block: Block, offset: Offset) => {
           const index = getIndexByPosition(position)
           board[index].emoji = ''
         })
-      }, 300)
+      }, 500)
 
       // 上面部分往下掉
       setTimeout(() => {
