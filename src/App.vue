@@ -1,4 +1,5 @@
 <template>
+  <div @click="shuffleBoard">打乱位置</div>
   <transition-group
     name="block"
     tag="div"
@@ -21,9 +22,11 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive } from 'vue'
+import { ref } from 'vue'
 import EmojiBlock from '@/components/EmojiBlock.vue'
 import type { Offset, Position } from './typing'
+import { Direction } from './typing'
+import { shuffle } from 'lodash-es'
 
 interface Block {
   id: ReturnType<typeof generateId>
@@ -42,7 +45,7 @@ const COL = 6
 // 连线范围
 const RANGE = 3
 
-const board = reactive(
+const board = ref(
   Array.from(
     {
       length: ROW * COL,
@@ -58,54 +61,72 @@ const getPositionByIndex = (index: number): Position => [index % COL, Math.floor
 
 const getIndexByPosition = ([x, y]: Position): number => y * COL + x
 
-const onDragEnd = (block: Block, offset: Offset) => {
-  const index = board.indexOf(block)
-  const sourceTargetPosition = changeBlockPosition(index, offset)
+// 延迟执行
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-  sourceTargetPosition.forEach(position => {
+const shuffleBoard = () => (board.value = shuffle(board.value))
+
+const onDragEnd = async (block: Block, offset: Offset) => {
+  const index = board.value.indexOf(block)
+  const sourcePosition = getPositionByIndex(index)
+  const swappedPosition = changeBlockPosition(sourcePosition, offset)
+
+  let linked = false
+  swappedPosition.forEach(position => {
     const linkedPositions = getLinkedPositions(position)
 
-    linkedPositions.forEach(positions => {
-      setTimeout(() => {
-        // 清空已连接的block
-        positions.forEach(position => {
-          const index = getIndexByPosition(position)
-          board[index].emoji = ''
-        })
-      }, 500)
+    if (linkedPositions.length) {
+      linked = true
+    }
 
+    linkedPositions.forEach(async positions => {
+      await sleep(500)
+      // 清空已连接的block
+      positions.forEach(position => {
+        const index = getIndexByPosition(position)
+        board.value[index].emoji = ''
+      })
       // 上面部分往下掉
-      setTimeout(() => {
-        moveWillDownBlock(positions)
-      }, 500)
+      moveWillDownBlock(positions)
 
       // 将空的快随机生成新的emojis
-      setTimeout(() => {
-        board.forEach(block => {
-          if (!block.emoji) {
-            block.emoji = getRandomEmoji()
-          }
-        })
-      }, 1000)
+      await sleep(500)
+      board.value.forEach(block => {
+        if (!block.emoji) {
+          block.emoji = getRandomEmoji()
+        }
+      })
     })
   })
+
+  if (!linked) {
+    await sleep(500)
+    changeBlockPosition(sourcePosition, offset)
+  }
+}
+
+const getTargetPositionByOffset = (sourcePosition: Position, offset: Offset): Position => {
+  const [sourceX, sourceY] = sourcePosition
+  const [offsetX, offsetY] = offset
+  return [sourceX + offsetX, sourceY + offsetY]
 }
 
 /**
  * 更换位置
- * @param sourceIndex
+ * @param sourcePosition 开始位置
  * @param offset 偏移位置
  * @return 交换过的两个坐标
  */
-const changeBlockPosition = (sourceIndex: number, offset: Offset): [Position, Position] | [] => {
-  // const sourceIndex = board.indexOf(source)
+const changeBlockPosition = (
+  sourcePosition: Position,
+  offset: Offset
+): [Position, Position] | [] => {
+  const sourceIndex = getIndexByPosition(sourcePosition)
   const [sourceX, sourceY] = getPositionByIndex(sourceIndex)
-  const [offsetX, offsetY] = offset
-  const targetX = sourceX + offsetX
-  const targetY = sourceY + offsetY
+  const [targetX, targetY] = getTargetPositionByOffset(sourcePosition, offset)
   const targetIndex = getIndexByPosition([targetX, targetY])
 
-  const element = document.getElementById(board[sourceIndex].id) as HTMLElement
+  const element = document.getElementById(board.value[sourceIndex].id) as HTMLElement
   let cls = ['animate-animated']
   if (targetX < 0 || targetX >= COL) {
     cls.push('animate-shakeX')
@@ -134,9 +155,13 @@ const changeBlockPosition = (sourceIndex: number, offset: Offset): [Position, Po
 
 // 交换位置
 const swap = (sourceIndex: number, targetIndex: number) =>
-  (board[sourceIndex] = board.splice(targetIndex, 1, board[sourceIndex])[0])
+  (board.value[sourceIndex] = board.value.splice(targetIndex, 1, board.value[sourceIndex])[0])
 
-// 获取需要检测的坐标
+/**
+ * 获取需要检测的坐标
+ * @param position 位置
+ * @return 周围需要检查的3个点
+ */
 const getCheckPositions = ([x, y]: Position): Position[][] => {
   // [2, 0]
   return [
@@ -176,20 +201,15 @@ const getLinkedPositions = (position: Position): Position[][] => {
   const checkPositions = getCheckPositions(position)
 
   return checkPositions.filter(positions => {
-    const checkEmojis = positions.map(position => board[getIndexByPosition(position)].emoji)
+    const checkEmojis = positions.map(position => board.value[getIndexByPosition(position)].emoji)
     // 这三个块的emoji是否一样
     return checkEmojis.every(emoji => emoji === checkEmojis[0])
   })
 }
 
-enum Direction {
-  HORIZONTAL,
-  VERTICAL,
-}
-
 /**
  * 移动将要往下掉的快
- * @param positions
+ * @param positions 已经空掉的block的坐标
  */
 const moveWillDownBlock = (positions: Position[]): void => {
   const direction: Direction = positions.every(([x]) => x === positions[0][0])

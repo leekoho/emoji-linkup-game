@@ -5,7 +5,7 @@
 </template>
 
 <script lang="ts" setup>
-import { Offset } from '../typing'
+import type { Offset } from '../typing'
 
 const emits = defineEmits(['drag-end'])
 
