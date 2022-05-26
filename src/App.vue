@@ -1,206 +1,226 @@
 <template>
-  <p class="py-2 text-center text-sm text-yellow-500">当前滑动方向: {{ direction }}</p>
   <transition-group
-    name="list"
+    name="block"
     tag="div"
-    mode="in-out"
     class="grid gap-2 p-2"
     :style="{
-      'grid-template-rows': `repeat(1, minmax(${ROW}, 1fr))`,
+      'grid-template-rows': `repeat(${ROW}, minmax(0, 1fr))`,
       'grid-template-columns': `repeat(${COL}, minmax(0, 1fr))`,
-    }">
-    <span
-      v-for="(item, idx) in items"
-      :key="item.id"
-      :id="item.id"
-      :data-row="item.row"
-      :data-col="item.col"
-      class="inline-block text-3xl text-center select-none"
-      @touchstart="onTouchStart($event, idx)"
-      @touchmove="onTouchMove"
-      @touchend="onTouchEnd">
-      {{ item.label }}
-    </span>
+    }"
+  >
+    <EmojiBlock
+      v-for="block in board"
+      :key="block.id"
+      :id="block.id"
+      class="block"
+      @drag-end="offset => onDragEnd(block, offset)"
+    >
+      {{ block.emoji }}
+    </EmojiBlock>
   </transition-group>
 </template>
 
 <script lang="ts" setup>
-import { shuffle } from 'lodash-es'
-import { reactive, ref } from 'vue'
+import { reactive } from 'vue'
+import EmojiBlock from '@/components/EmojiBlock.vue'
+import { Offset, Position } from './typing'
 
-interface Position {
-  x: number
-  y: number
+interface Block {
+  id: ReturnType<typeof generateId>
+  emoji: string
+}
+
+const generateId = () => URL.createObjectURL(new Blob()).slice(-12)
+
+const emojis = ['🐶', '🐱', '🐭', '🐰', '🦊', '🐻', '🐼', '🐸', '🐯', '🐷', '🐵', '🦄']
+const getRandomEmoji = () => emojis[Math.floor(Math.random() * emojis.length)]
+
+// 行
+const ROW = 14
+// 列
+const COL = 6
+// 连线范围
+const RANGE = 3
+
+const board = reactive(
+  Array.from(
+    {
+      length: ROW * COL,
+    },
+    (): Block => ({
+      id: generateId(),
+      emoji: getRandomEmoji(),
+    })
+  )
+)
+
+const getPositionByIndex = (index: number): Position => [index % COL, Math.floor(index / COL)]
+
+const getIndexByPosition = ([x, y]: Position): number => y * COL + x
+
+const onDragEnd = (block: Block, offset: Offset) => {
+  const index = board.indexOf(block)
+  const sourceTargetPosition = changeBlockPosition(index, offset)
+
+  sourceTargetPosition.forEach(position => {
+    const linkedPositions = getLinkedPositions(position)
+
+    linkedPositions.forEach(positions => {
+      setTimeout(() => {
+        // 清空已连接的block
+        positions.forEach(position => {
+          const index = getIndexByPosition(position)
+          board[index].emoji = ''
+        })
+      }, 300)
+
+      // 上面部分往下掉
+      setTimeout(() => {
+        moveWillDownBlock(positions)
+      }, 500)
+
+      // 将空的快随机生成新的emojis
+      setTimeout(() => {
+        board.forEach(block => {
+          if (!block.emoji) {
+            block.emoji = getRandomEmoji()
+          }
+        })
+      }, 1000)
+    })
+  })
+}
+
+/**
+ * 更换位置
+ * @param sourceIndex
+ * @param offset 偏移位置
+ * @return 交换过的两个坐标
+ */
+const changeBlockPosition = (sourceIndex: number, offset: Offset): [Position, Position] | [] => {
+  // const sourceIndex = board.indexOf(source)
+  const [sourceX, sourceY] = getPositionByIndex(sourceIndex)
+  const [offsetX, offsetY] = offset
+  const targetX = sourceX + offsetX
+  const targetY = sourceY + offsetY
+  const targetIndex = getIndexByPosition([targetX, targetY])
+
+  const element = document.getElementById(board[sourceIndex].id) as HTMLElement
+  let cls = ['animate-animated']
+  if (targetX < 0 || targetX >= COL) {
+    cls.push('animate-shakeX')
+  }
+
+  if (targetY < 0 || targetY >= ROW) {
+    cls.push('animate-shakeY')
+  }
+
+  if (cls.length > 1) {
+    element.classList.add(...cls)
+    setTimeout(() => {
+      element.classList.remove(...cls)
+    }, 500)
+    return []
+  }
+
+  // 交换数组位置
+  swap(sourceIndex, targetIndex)
+
+  return [
+    [sourceX, sourceY],
+    [targetX, targetY],
+  ]
+}
+
+// 交换位置
+const swap = (sourceIndex: number, targetIndex: number) =>
+  (board[sourceIndex] = board.splice(targetIndex, 1, board[sourceIndex])[0])
+
+// 获取需要检测的坐标
+const getCheckPositions = ([x, y]: Position): Position[][] => {
+  // [2, 0]
+  return [
+    // 横向需要检测的坐标
+    // [0, 0][1, 0][2, 0]
+    // [1, 0][2, 0][3, 0]
+    // [2, 0][3, 0][4, 0]
+    ...Array.from({ length: RANGE }, (_, i): Position[] => {
+      const start = x - (RANGE - 1) + i
+      const end = start + 2
+      if (start < 0 || start >= COL || end < 0 || end >= COL) return []
+      return [
+        [start, y],
+        [start + 1, y],
+        [end, y],
+      ]
+    }).filter(t => t.length),
+    ...Array.from({ length: RANGE }, (_, i): Position[] => {
+      const start = y - (RANGE - 1) + i
+      const end = start + 2
+      if (start < 0 || start >= ROW || end < 0 || end >= ROW) return []
+      return [
+        [x, start],
+        [x, start + 1],
+        [x, start + 2],
+      ]
+    }).filter(t => t.length),
+  ]
+}
+
+/**
+ * 获取已连接的坐标
+ * @param position
+ * @return 已连接的坐标
+ */
+const getLinkedPositions = (position: Position): Position[][] => {
+  const checkPositions = getCheckPositions(position)
+
+  return checkPositions.filter(positions => {
+    const checkEmojis = positions.map(position => board[getIndexByPosition(position)].emoji)
+    // 这三个块的emoji是否一样
+    return checkEmojis.every(emoji => emoji === checkEmojis[0])
+  })
 }
 
 enum Direction {
-  UP = 'up',
-  DOWN = 'down',
-  LEFT = 'left',
-  RIGHT = 'right',
+  HORIZONTAL,
+  VERTICAL,
 }
 
-interface Item {
-  id: ReturnType<typeof generateId>
-  row: number
-  col: number
-  label: string
-}
+/**
+ * 移动将要往下掉的快
+ * @param positions
+ */
+const moveWillDownBlock = (positions: Position[]): void => {
+  const direction: Direction = positions.every(([x]) => x === positions[0][0])
+    ? Direction.VERTICAL
+    : Direction.HORIZONTAL
 
-const generateId = () => URL.createObjectURL(new Blob()).slice(-36)
-
-const emojis = ['🐶', '🐱', '🐭', '🐰', '🦊', '🐻', '🐼', '🐸', '🐯', '🐷', '🐵', '🦄']
-const ROW = 14
-const COL = 7
-
-const initItems = (): Item[] =>
-  Array.from({ length: ROW * COL }).map((_, i) => ({
-    id: generateId(),
-    row: Math.floor(i / COL),
-    col: i % COL,
-    label: emojis[Math.ceil(Math.random() * emojis.length - 1)],
-  }))
-
-const items = ref(initItems())
-
-// 开始位置
-const startPos: Position = { x: 0, y: 0 }
-// 结束位置
-const endPos: Position = { x: 0, y: 0 }
-// 滑动方向
-const direction = ref<Direction>(Direction.UP)
-
-let sourceIdx = -1
-let targetIdx = -1
-
-const onTouchStart = (e: TouchEvent, idx: number) => {
-  const { pageX, pageY } = e.targetTouches[0]
-  startPos.x = pageX
-  startPos.y = pageY
-
-  sourceIdx = idx
-}
-
-const onTouchMove = (e: TouchEvent) => {
-  const { pageX, pageY } = e.targetTouches[0]
-  endPos.x = pageX
-  endPos.y = pageY
-}
-
-const onTouchEnd = (e: TouchEvent) => {
-  const x = endPos.x - startPos.x
-  const y = endPos.y - startPos.y
-
-  if (Math.abs(x) > Math.abs(y) && x > 0) {
-    direction.value = Direction.RIGHT
-  } else if (Math.abs(x) > Math.abs(y) && x < 0) {
-    direction.value = Direction.LEFT
-  } else if (Math.abs(y) > Math.abs(x) && y > 0) {
-    direction.value = Direction.DOWN
-  } else if (Math.abs(y) > Math.abs(x) && y < 0) {
-    direction.value = Direction.UP
-  }
-
-  if (sourceIdx <= -1) return
-
-  const sourceItem = items.value[sourceIdx]
-
-  if (
-    !direction.value ||
-    (direction.value === Direction.UP && sourceItem.row === 0) ||
-    (direction.value === Direction.DOWN && sourceItem.row === ROW - 1) ||
-    (direction.value === Direction.LEFT && sourceItem.col === 0) ||
-    (direction.value === Direction.RIGHT && sourceItem.col === COL - 1)
-  ) {
-    errorAnimate(e.target as HTMLElement)
-    return
-  }
-
-  let row = sourceItem.row
-  let col = sourceItem.col
-  switch (direction.value) {
-    case Direction.UP:
-      row--
-      break
-    case Direction.DOWN:
-      row++
-      break
-    case Direction.LEFT:
-      col--
-      break
-    case Direction.RIGHT:
-      col++
-      break
-  }
-  targetIdx = items.value.findIndex(item => item.row === row && item.col === col)
-
-  if (direction.value === Direction.LEFT || direction.value === Direction.RIGHT) {
-    const temp = items.value[sourceIdx].col
-    items.value[sourceIdx].col = items.value[targetIdx].col
-    items.value[targetIdx].col = temp
+  const [[startX, startY], , [endX, endY]] = positions
+  if (direction === Direction.VERTICAL) {
+    for (let y = startY - 1; y >= 0; y--) {
+      swap(getIndexByPosition([startX, y]), getIndexByPosition([startX, y + RANGE]))
+    }
   } else {
-    const temp = items.value[sourceIdx].row
-    items.value[sourceIdx].row = items.value[targetIdx].row
-    items.value[targetIdx].row = temp
+    for (let x = startX; x <= endX; x++) {
+      for (let y = endY - 1; y >= 0; y--) {
+        swap(getIndexByPosition([x, y + 1]), getIndexByPosition([x, y]))
+      }
+    }
   }
-  items.value = items.value.sort((a, b) => a.row * 10 + a.col - (b.row * 10 + b.col))
-}
-
-const errorAnimate = (element: HTMLElement) => {
-  if (!direction.value) return
-  const cls = [Direction.LEFT, Direction.RIGHT].includes(direction.value)
-    ? 'animate-shakeX'
-    : 'animate-shakeY'
-  element.classList.add('animate')
-  element.classList.add(cls)
-
-  setTimeout(() => {
-    element.classList.remove()
-    element.classList.remove(cls)
-  }, 500)
 }
 </script>
 
 <style lang="scss">
 body {
-  touch-action: none;
+  @apply touch-none;
 }
 
-.list-move, /* 对移动中的元素应用的过渡 */
-.list-enter-active,
-.list-leave-active {
-  transition: all 0.5s ease;
+.block {
+  @apply inline-block text-3xl text-center select-none transition;
 }
 
-.list-enter-from,
-.list-leave-to {
-  opacity: 0;
-  transform: translateX(30px);
-}
-
-/* 确保将离开的元素从布局流中删除
-  以便能够正确地计算移动的动画。 */
-.list-leave-active {
-  position: absolute;
-}
-
-/* 1. declare transition */
-.fade-move,
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.5s cubic-bezier(0.55, 0, 0.1, 1);
-}
-
-/* 2. declare enter from and leave to state */
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: scaleY(0.01) translate(30px, 0);
-}
-
-/* 3. ensure leaving items are taken out of layout flow so that moving
-      animations can be calculated correctly. */
-.fade-leave-active {
-  position: absolute;
+.block-move {
+  @apply transition-transform duration-500;
 }
 </style>

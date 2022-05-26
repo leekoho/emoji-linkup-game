@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { resolve } from 'path'
 import vue from '@vitejs/plugin-vue'
 import WindiCSS from 'vite-plugin-windicss'
 import WindiCSSPluginAnimations from '@windicss/plugin-animations'
@@ -15,5 +16,13 @@ export default defineConfig({
   ],
   server: {
     port: 8080,
+  },
+  resolve: {
+    alias: [
+      {
+        find: '@',
+        replacement: `${resolve(__dirname, 'src')}`,
+      },
+    ],
   },
 })
